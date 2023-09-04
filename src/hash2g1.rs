@@ -9,30 +9,17 @@ pub use sha2::{Sha256, digest::Digest};
 use subtle::{Choice, ConditionallySelectable};
 use std::str::FromStr;
 pub trait From {
-    fn from_bytes48(data: GenericArray::<u8, U48>) -> Self;
     fn from_bytes32(data: GenericArray::<u8, U32>) -> Self;
 }
 
 impl From for Fr {
-    fn from_bytes48(bytes: GenericArray<u8, U48>) -> Self {
-        // BigUint::from_bytes_be(bytes.as_slice());
-        Fr::from(BigUint::from_bytes_be(bytes.as_slice()))
-    }
-
     fn from_bytes32(bytes: GenericArray<u8, U32>) -> Self {
-    // BigUint::from_bytes_be(bytes.as_slice());
     Fr::from(BigUint::from_bytes_be(bytes.as_slice()))
     }
 }
 
 impl From for Fq {
-    fn from_bytes48(bytes: GenericArray<u8, U48>) -> Self {
-        // BigUint::from_bytes_be(bytes.as_slice());
-        Fq::from(BigUint::from_bytes_be(bytes.as_slice()))
-      }
-
     fn from_bytes32(bytes: GenericArray<u8, U32>) -> Self {
-    // BigUint::from_bytes_be(bytes.as_slice());
     Fq::from(BigUint::from_bytes_be(bytes.as_slice()))
     }
 }
@@ -54,9 +41,7 @@ impl FromOkm<L> for Fr {
         let mut x = BigUint::from_bytes_be(&data[..]);
             x = x.mod_floor(&p);
             let t = x.to_bytes_be();
-            // while t.len() < L {
-            //     t.insert(0, 0u8);
-            // }
+
             let t = GenericArray::<u8, U32>::clone_from_slice(&t);
 
             Fr::from_bytes32(t)
@@ -73,9 +58,7 @@ impl FromOkm<L> for Fq {
         let mut x = BigUint::from_bytes_be(&data[..]);
             x = x.mod_floor(&p);
             let t = x.to_bytes_be();
-            // while t.len() < L {
-            //     t.insert(0, 0u8);
-            // }
+
             let t = GenericArray::<u8, U32>::clone_from_slice(&t);
 
             Fq::from_bytes32(t)
@@ -187,9 +170,7 @@ impl Hash2FieldBN254<COUNT> for Fq {
     }
 }
 
-// pub trait Hash2CurveG1 {
-//     fn hash_to_curve(msg: &[u8], dst: &[u8]) -> Self;
-// }
+
 
 
 // https://github.com/ConsenSys/gnark-crypto/blob/master/ecc/bn254/hash_to_g1.go
@@ -284,6 +265,7 @@ fn g1Sgn0(x: Fq) -> u64 {
 }
 
 #[allow(non_snake_case)]
+#[allow(dead_code)]
 fn HashToG1(msg: &[u8], dst: &[u8]) -> G1 {
     let u = Hash2FieldBN254::hash_to_field(msg, dst);
     let Q0 = MapToCurve1(u[0]);
@@ -397,16 +379,23 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn HashToG1_test() {
-        let u = Fq::hash_to_field(b"abc", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
-        assert!(u[0] == Fq::from_str("7951370986911800256774597109927097176311261202951929331835478768207980370345").unwrap());
-        assert!(u[1] == Fq::from_str("8293556689416303717881563281438712057465092967957999993252567763605862533321").unwrap());
-        let q0 = MapToCurve1(u[0]);
-        let q1 = MapToCurve1(u[1]);
-        assert!(q0 == G1::new(Fq::from_str("9192524283969255398734814822241735402343760142215332184598869386265143635853").unwrap(), Fq::from_str("14750013374492649779039522357455217122947104756064249167130349093550158884161").unwrap()));
-        assert!(q1 == G1::new(Fq::from_str("2219529064992744478098731193326567804904209297389738932911685687632211367327").unwrap(), Fq::from_str("1910726159786414357764375718946103460897900837832114831609513656424867805207").unwrap()));
+        
+        // Test Vector taken from https://github.com/Consensys/gnark-crypto/blob/master/ecc/bn254/hash_vectors_test.go
 
         let q = HashToG1(b"abc", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
         assert!(q == G1::new(Fq::from_str("16267524812466668166267883771992486438338357688076900798565538061554532963281").unwrap(), Fq::from_str("1844916233815282837483764409618609279507070495361570126601873459268232811805").unwrap()));
+
+        let q = HashToG1(b"abcdef0123456789", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        assert!(q == G1::new(Fq::from_str("11077683243901808951859264683654586764079462418577485658911541848692394044746").unwrap(), Fq::from_str("4858124309270455482359664916577923636817363175462672327824733704859450489677").unwrap()));
+
+        let q = HashToG1(b"q128_qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        assert!(q == G1::new(Fq::from_str("449076125358095157945547407089359408531318284903480972761046551095956160348").unwrap(), Fq::from_str("3427911873443593747709927415036866402371639925174562008506349359915732032632").unwrap()));
+
+        let q = HashToG1(b"", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        assert!(q == G1::new(Fq::from_str("4790658965958450548702669593570794336562317867247372723806336874591549759110").unwrap(), Fq::from_str("1163238807669877429342450210709044731909255047583162173012265677391336920021").unwrap()));
+
+        let q = HashToG1(b"a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        assert!(q == G1::new(Fq::from_str("763925112321939766609678334678065587309331741428777416269918389033192485838").unwrap(), Fq::from_str("12636771015364464547273606234110225240317241569495907283228710706019336772016").unwrap()));
 
     }
 }
