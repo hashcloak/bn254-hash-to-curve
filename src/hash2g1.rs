@@ -1,5 +1,5 @@
 
-use ark_bn254::{fr::Fr, fq::Fq, G1Affine as G1};
+use ark_bn254::{fq::Fq, G1Affine as G1};
 use ark_ff::Field;
 use num_bigint::BigUint;
 use digest::generic_array::GenericArray;
@@ -12,18 +12,11 @@ pub trait From {
     fn from_bytes32(data: GenericArray::<u8, U32>) -> Self;
 }
 
-impl From for Fr {
-    fn from_bytes32(bytes: GenericArray<u8, U32>) -> Self {
-    Fr::from(BigUint::from_bytes_be(bytes.as_slice()))
-    }
-}
-
 impl From for Fq {
     fn from_bytes32(bytes: GenericArray<u8, U32>) -> Self {
     Fq::from(BigUint::from_bytes_be(bytes.as_slice()))
     }
 }
-
 
 pub trait FromOkm<const L: usize>: Sized {
     /// Convert a byte sequence into a scalar
@@ -31,23 +24,6 @@ pub trait FromOkm<const L: usize>: Sized {
 }
 
 const L: usize = 48;
-impl FromOkm<L> for Fr {
-    fn from_okm(data: &[u8; L]) -> Self {
-        let p = BigUint::from_bytes_be(
-            &hex::decode("30644E72E131A029B85045B68181585D2833E84879B9709143E1F593F0000001")
-                .unwrap(),
-        );
-
-        let mut x = BigUint::from_bytes_be(&data[..]);
-            x = x.mod_floor(&p);
-            let t = x.to_bytes_be();
-
-            let t = GenericArray::<u8, U32>::clone_from_slice(&t);
-
-            Fr::from_bytes32(t)
-    }
-}
-
 impl FromOkm<L> for Fq {
     fn from_okm(data: &[u8; L]) -> Self {
         let p = BigUint::from_bytes_be(
@@ -57,23 +33,20 @@ impl FromOkm<L> for Fq {
 
         let mut x = BigUint::from_bytes_be(&data[..]);
             x = x.mod_floor(&p);
-            let t = x.to_bytes_be();
-
-            let t = GenericArray::<u8, U32>::clone_from_slice(&t);
-
-            Fq::from_bytes32(t)
+            Fq::from(x)
     }
 }
 
 
-pub trait ExpandMsgSHA256<const LEN_IN_BYTES: usize> {
+pub trait ExpandMsgSHA256 {
     /// Expands `msg` to the required number of bytes in `buf`
-    fn expand_message(msg: &[u8], dst: &[u8]) -> [u8; LEN_IN_BYTES];
+    #[allow(non_snake_case)]
+    fn expand_message(msg: &[u8], dst: &[u8], LEN_IN_BYTES: usize) -> Vec<u8>;
 }
 
-const LEN_IN_BYTES: usize = 96;
-impl ExpandMsgSHA256<LEN_IN_BYTES> for Fq {
-    fn expand_message(msg: &[u8], dst: &[u8]) -> [u8; LEN_IN_BYTES] {
+#[allow(non_snake_case)]
+impl ExpandMsgSHA256 for Fq {
+    fn expand_message(msg: &[u8], dst: &[u8], LEN_IN_BYTES: usize) -> Vec<u8> {
         
         let b_in_bytes: usize = 32;
         let ell = (LEN_IN_BYTES + b_in_bytes - 1 )/ b_in_bytes;
@@ -101,7 +74,7 @@ impl ExpandMsgSHA256<LEN_IN_BYTES> for Fq {
             .chain_update([dst.len() as u8])
             .finalize();
 
-        let mut buf = [0u8; LEN_IN_BYTES];
+        let mut buf = [0u8; 4 * 48];
         let mut offset = 0;
 
         for i in 1..ell {
@@ -130,20 +103,18 @@ impl ExpandMsgSHA256<LEN_IN_BYTES> for Fq {
             .conditional_assign(&b, Choice::from(if offset < LEN_IN_BYTES { 1 } else { 0 }));
             offset += 1;
         }
-        buf
+        buf.into()
     }
 }
 
 
-pub trait Hash2FieldBN254<const COUNT: usize> {
-    fn hash_to_field (msg: &[u8], dst: &[u8]) -> Vec<Self> where Self: Sized;
+pub trait Hash2FieldBN254 {
+    fn hash_to_field (msg: &[u8], dst: &[u8], count: usize) -> Vec<Self> where Self: Sized;
 }
 
-const COUNT: usize = 2;
-
-impl Hash2FieldBN254<COUNT> for Fq {
+impl Hash2FieldBN254 for Fq {
     
-    fn hash_to_field(msg: &[u8], dst: &[u8]) -> Vec<Fq> {
+    fn hash_to_field(msg: &[u8], dst: &[u8], count: usize) -> Vec<Fq> {
 
         /*
         - p, the characteristic of F .
@@ -153,11 +124,12 @@ impl Hash2FieldBN254<COUNT> for Fq {
          */
 
         let len_per_elm = 48;
-        // let len_in_bytes = COUNT * len_per_elm;
-        let pseudo_random_bytes = Fq::expand_message(msg, dst);
+        let len_in_bytes = count * len_per_elm;
+        // let len_in_bytes = count * len_per_elm;
+        let pseudo_random_bytes = Fq::expand_message(msg, dst, len_in_bytes);
     
-        let mut r = Vec::<Fq>::with_capacity(COUNT);
-        for i in 0..COUNT {
+        let mut r = Vec::<Fq>::with_capacity(count);
+        for i in 0..count {
             let bytes = GenericArray::<u8, U48>::from_slice(
                 &pseudo_random_bytes[i * len_per_elm..(i + 1) * len_per_elm],
             );
@@ -175,7 +147,7 @@ impl Hash2FieldBN254<COUNT> for Fq {
 
 // https://github.com/ConsenSys/gnark-crypto/blob/master/ecc/bn254/hash_to_g1.go
 #[allow(non_snake_case)]
-pub fn MapToCurve1(mut u: Fq) -> G1{
+pub fn MapToCurve1(u: Fq) -> G1{
 
 	//constants
 	//c1 = g(Z)
@@ -244,10 +216,10 @@ pub fn MapToCurve1(mut u: Fq) -> G1{
     gx = gx + Fq::from_str("3").unwrap();      //    32.  gx = gx + B
 
     let mut y: Fq = gx.sqrt().unwrap();     //    33.   y = sqrt(gx)
-    u = u * Fq::from(Fq::R);
+
 
     #[allow(non_snake_case)]
-    let signsNotEqual = g1Sgn0(u * Fq::from(Fq::R).inverse().unwrap()) ^ g1Sgn0(y);
+    let signsNotEqual = g1Sgn0(u) ^ g1Sgn0(y);
 
     tv1 = Fq::from(0) - y;
     //TODO: conditionallySelect
@@ -265,9 +237,18 @@ fn g1Sgn0(x: Fq) -> u64 {
 }
 
 #[allow(non_snake_case)]
+pub fn g1NotZero(x: Fq) -> u64 {
+
+    let t: BigUint = x.into();
+    let t_vec = t.to_u64_digits();
+	return t_vec[0] | t_vec[1] | t_vec[2] | t_vec[3];
+
+}
+
+#[allow(non_snake_case)]
 #[allow(dead_code)]
 fn HashToG1(msg: &[u8], dst: &[u8]) -> G1 {
-    let u = Hash2FieldBN254::hash_to_field(msg, dst);
+    let u = Hash2FieldBN254::hash_to_field(msg, dst, 2);
     let Q0 = MapToCurve1(u[0]);
     let Q1 = MapToCurve1(u[1]);
     let Q = Q0 + Q1;
@@ -283,6 +264,7 @@ mod tests {
     use crate::hash2g1::MapToCurve1;
     use crate::hash2g1::G1;
     use crate::hash2g1::HashToG1;
+    
     #[test]
     fn hash2field_test() {
 
@@ -293,7 +275,7 @@ mod tests {
         // Q0: point{"0x1452c8cc24f8dedc25b24d89b87b64e25488191cecc78464fea84077dd156f8d", "0x209c3633505ba956f5ce4d974a868db972b8f1b69d63c218d360996bcec1ad41"},
         // Q1: point{"0x4e8357c98524e6208ae2b771e370f0c449e839003988c2e4ce1eaf8d632559f", "0x4396ec43dd8ec8f2b4a705090b5892219759da30154c39490fc4d59d51bb817"},
         // u0: "0x11945105b5e3d3b9392b5a2318409cbc28b7246aa47fa30da5739907737799a9", u1: "0x1255fc9ad5a6e0fb440916f091229bda611c41be2f2283c3d8f98c596be4c8c9",
-        let u = Fq::hash_to_field(b"abc", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        let u = Fq::hash_to_field(b"abc", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_", 2);
         assert!(u[0] == Fq::from_str("7951370986911800256774597109927097176311261202951929331835478768207980370345").unwrap());
         assert!(u[1] == Fq::from_str("8293556689416303717881563281438712057465092967957999993252567763605862533321").unwrap());
 
@@ -302,7 +284,7 @@ mod tests {
         // Q1: point{"0x7dc256c7aadac1b4e1d23b3b2bbb5e2ffd9c753b9073d8d952ead8f812ce1b3", "0x2589008b2e15dcb3d16cdc1fed2634778001b1b28f0ab433f4f5ec6635c55e1e"},
         // u0: "0x2f7993a6b43a8dbb37060e790011a888157f456b895b925c3568690685f4983d", u1: "0x2677d0532b47a4cead2488845e7df7ebc16c0b8a2cd8a6b7f4ce99f51659794e",
 
-        let u = Fq::hash_to_field(b"abcdef0123456789", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        let u = Fq::hash_to_field(b"abcdef0123456789", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_", 2);
         assert!(u[0] == Fq::from_str("21473511429296129787161665655193361189518945362859158450118183976151186446397").unwrap());
         assert!(u[1] == Fq::from_str("17399580852346357386985693124899680967448413221719274165687915620563859110222").unwrap());
 
@@ -311,7 +293,7 @@ mod tests {
         // Q1: point{"0x19388d9112a306fba595c3a8c63daa8f04205ad9581f7cf105c63c442d7c6511", "0x182da356478aa7776d1de8377a18b41e933036d0b71ab03f17114e4e673ad6e4"},
         // u0: "0x2f87b81d9d6ef05ad4d249737498cc27e1bd485dca804487844feb3c67c1a9b5", u1: "0x6de2d0d7c0d9c7a5a6c0b74675e7543f5b98186b5dbf831067449000b2b1f8e",
 
-        let u = Fq::hash_to_field(b"", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        let u = Fq::hash_to_field(b"", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_", 2);
         assert!(u[0] == Fq::from_str("21498498956904532351723378912032873852253513037650692457560050969314502748597").unwrap());
         assert!(u[1] == Fq::from_str("3106428082009635406807032300288584059640244342225966151234406580587112112014").unwrap());
 
@@ -320,7 +302,7 @@ mod tests {
         // Q1: point{"0x2811dea430f7a1f6c8c941ecdf0e1e725b8ad1801ad15e832654bd8f10b62f16", "0x253390ed4fb39e58c30ca43892ab0428684cfb30b9df05fc239ab532eaa02444"},
         // u0: "0x48527470f534978bae262c0f3ba8380d7f560916af58af9ad7dcb6a4238e633", u1: "0x19a6d8be25702820b9b11eada2d42f425343889637a01ecd7672fbcf590d9ffe",
 
-        let u = Fq::hash_to_field(b"a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        let u = Fq::hash_to_field(b"a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_", 2);
         assert!(u[0] == Fq::from_str("2044513137826275527915612741016000753813717898656440700304636055936191489587").unwrap());
         assert!(u[1] == Fq::from_str("11602613730878338430727365363851039884306398846852682736694594518413917134846").unwrap());
 
@@ -329,7 +311,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn MapToCurve1_test() {
-        let u = Fq::hash_to_field(b"abc", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        let u = Fq::hash_to_field(b"abc", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_", 2);
         assert!(u[0] == Fq::from_str("7951370986911800256774597109927097176311261202951929331835478768207980370345").unwrap());
         assert!(u[1] == Fq::from_str("8293556689416303717881563281438712057465092967957999993252567763605862533321").unwrap());
         let q0 = MapToCurve1(u[0]);
@@ -337,7 +319,7 @@ mod tests {
         assert!(q0 == G1::new(Fq::from_str("9192524283969255398734814822241735402343760142215332184598869386265143635853").unwrap(), Fq::from_str("14750013374492649779039522357455217122947104756064249167130349093550158884161").unwrap()));
         assert!(q1 == G1::new(Fq::from_str("2219529064992744478098731193326567804904209297389738932911685687632211367327").unwrap(), Fq::from_str("1910726159786414357764375718946103460897900837832114831609513656424867805207").unwrap()));
 
-        let u = Fq::hash_to_field(b"abcdef0123456789", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        let u = Fq::hash_to_field(b"abcdef0123456789", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_", 2);
         assert!(u[0] == Fq::from_str("21473511429296129787161665655193361189518945362859158450118183976151186446397").unwrap());
         assert!(u[1] == Fq::from_str("17399580852346357386985693124899680967448413221719274165687915620563859110222").unwrap());
         let q0 = MapToCurve1(u[0]);
@@ -345,7 +327,7 @@ mod tests {
         assert!(q0 == G1::new(Fq::from_str("18460180777384996805517037410124907200489198402642233028065858702876325100173").unwrap(), Fq::from_str("7297925201307108404837100086863759533322513325723985709501528779399363778017").unwrap()));
         assert!(q1 == G1::new(Fq::from_str("3555154583542724794659651262588560064541528505277497563560719769602741821875").unwrap(), Fq::from_str("16977637197741440727690443467244845071598833410411827382713029829487302630942").unwrap()));
 
-        let u = Fq::hash_to_field(b"", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        let u = Fq::hash_to_field(b"", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_", 2);
         assert!(u[0] == Fq::from_str("21498498956904532351723378912032873852253513037650692457560050969314502748597").unwrap());
         assert!(u[1] == Fq::from_str("3106428082009635406807032300288584059640244342225966151234406580587112112014").unwrap());
         let q0 = MapToCurve1(u[0]);
@@ -353,7 +335,7 @@ mod tests {
         assert!(q0 == G1::new(Fq::from_str("6453599284581821454252898427469570073430843606970728650145294868078481709202").unwrap(), Fq::from_str("18995581315822946008285423533984677217009732542182181378734620089887646003813").unwrap()));
         assert!(q1 == G1::new(Fq::from_str("11407741707599100220112369632304941265828026024296299145123573579681208493329").unwrap(), Fq::from_str("10936143794657572576642578819087135925019845836839797797601194413922673415908").unwrap()));
 
-        let u = Fq::hash_to_field(b"a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        let u = Fq::hash_to_field(b"a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_", 2);
         assert!(u[0] == Fq::from_str("2044513137826275527915612741016000753813717898656440700304636055936191489587").unwrap());
         assert!(u[1] == Fq::from_str("11602613730878338430727365363851039884306398846852682736694594518413917134846").unwrap());
         let q0 = MapToCurve1(u[0]);
@@ -366,7 +348,7 @@ mod tests {
         // Q1: point{"0x214a4e6e97adda47558f80088460eabd71ed35bc8ceafb99a493dd6f4e2b3f0a", "0xfaaeb29cc23f9d09b187a99741613aed84443e7c35736258f57982d336d13bd"},
         // u0: "0x2a50be15282ee276b76db1dab761f75401cdc8bd9fff81fcf4d428db16092a7b", u1: "0x23b41953676183c30aca54b5c8bd3ffe3535a6238c39f6b15487a5467d5d20eb",
 
-        let u = Fq::hash_to_field(b"q128_qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+        let u = Fq::hash_to_field(b"q128_qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_", 2);
         assert!(u[0] == Fq::from_str("19139799307876008157674469077244497844490197231122854489816996874209678928507").unwrap());
         assert!(u[1] == Fq::from_str("16149156964295957170548772524136742336424608142546544142472739268994996707563").unwrap());
         let q0 = MapToCurve1(u[0]);
