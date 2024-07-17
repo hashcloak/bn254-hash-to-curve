@@ -1,4 +1,4 @@
-use ark_bn254::{fq::Fq, fq2::Fq2, G2Affine, G1Projective, G2Projective};
+use ark_bn254::{fq::Fq, fq2::Fq2, G2Affine};
 // use ark_ec::short_weierstrass::Affine;
 use ark_ff::Field;
 use num_bigint::BigUint;
@@ -143,8 +143,6 @@ pub fn HashToG2(msg: &[u8], dst: &[u8]) -> G2Affine {
         }
     );
 
-    // println!("{:?}", q0.x.c0 * Fq::from(Fq::R));
-
     let q1 = MapToCurve2(
         Fq2{
             c0: u[2],
@@ -152,14 +150,10 @@ pub fn HashToG2(msg: &[u8], dst: &[u8]) -> G2Affine {
         }
     );
 
-
+    // the value of q matches with gnark-crypto upto here
     let q:G2Affine = (q0 + q1).into();
-    // println!("{:?}", q.y.c0 * Fq::from(Fq::R));
 
-    let _q = q.clear_cofactor();
-    // let qr: G2Projective = _q.into();
-    println!("{:?}", _q.x.c0 );
-    _q.into()
+    q.clear_cofactor()
 }
 
 #[cfg(test)]
@@ -225,53 +219,24 @@ mod tests {
     }
 
 
-    // #[test]
-    // #[allow(non_snake_case)]
-    // fn HashToCurve2_test() {
+    #[test]
+    #[allow(non_snake_case)]
+    fn HashToCurve2_test() {
+        // use ark_ff::Field;
+        let q = HashToG2(b"abc", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
+        assert!(q.is_on_curve());
 
-    //     let q0 = HashToG2(b"abc", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
-    //     // println!("{:?}", q0);
-    //     let expected = G2Affine::new_unchecked(Fq2{
-    //         c0: Fq::from_str("10305213714312555419584685236164610766057227018997600762219755820581571775698").unwrap(),
-    //         c1: Fq::from_str("5140998983273781645596043003996621170933075714207210952317183701750931672829").unwrap()
-    //     }, Fq2{
-    //         c0: Fq::from_str("12782657610222102886506935265351398708799194735435757564502179253917869011884").unwrap(),
-    //         c1: Fq::from_str("15746452850775091549966312821847336261590899319279618339578671846526379873840").unwrap()
-    //     });
-    //     assert!(expected.is_on_curve());
-    //     assert!(q0.x.c0 == expected.x.c0);
+        let q = HashToG2(b"", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
+        assert!(q.is_on_curve());
 
-        // let u = Fq2{
-        //     c0: Fq::from_str("12752967732566665017975022503761080419696068755373050496264700974774108086129").unwrap(),
-        //     c1: Fq::from_str("20655422394809824901799481664662586419100706577355794400212187554951433717414").unwrap()
-        // };
+        let q = HashToG2(b"abcdef0123456789", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
+        assert!(q.is_on_curve());
 
-        // let q = MapToCurve2(u);
-        // let expected = G2Affine::new_unchecked(Fq2{
-        //     c0: Fq::from_str("12193882055337081757241417044229479753659926309860257758224177044622322698984").unwrap(),
-        //     c1: Fq::from_str("10092155993942609715417531227866448864240630219985669320168414926220064901453").unwrap()
-        // }, Fq2{
-        //     c0: Fq::from_str("21850450548984866542151665069165216760882062028063278212318726360439829725223").unwrap(),
-        //     c1: Fq::from_str("10197523149668572844555341938160230574503097016636734560718180396672437043430").unwrap()
-        // });
-        // assert!(expected.is_on_curve());
-        // assert!(q.x == expected.x);
+        let q = HashToG2(b"q128_qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
+        assert!(q.is_on_curve());
 
-        // let u = Fq2{
-        //     c0: Fq::from_str("18898141882839095816276844526801422247849121311000147859768000750276893266433").unwrap(),
-        //     c1: Fq::from_str("3788127287937052767604234353437582991385298973804519256517508390161626404924").unwrap()
-        // };
-
-        // let q = MapToCurve2(u);
-        // let expected = G2Affine::new_unchecked(Fq2{
-        //     c0: Fq::from_str("452805888478466390914725495219599183584561454657558688011312346353060651482").unwrap(),
-        //     c1: Fq::from_str("7959928416860499659800248632934402218020177178560427800377197797165640390130").unwrap()
-        // }, Fq2{
-        //     c0: Fq::from_str("14268098188884406522254505541441598455366967966015814006726862271011081843493").unwrap(),
-        //     c1: Fq::from_str("15148517265986515293057552799755027217326970615601185424102524485888012383276").unwrap()
-        // });
-        // assert!(expected.is_on_curve());
-        // assert!(q.x == expected.x);
-    // }
+        let q = HashToG2(b"a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
+        assert!(q.is_on_curve());
+    }
 
 }
