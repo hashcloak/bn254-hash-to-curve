@@ -8,15 +8,6 @@ use digest::generic_array::{typenum::U48, typenum::U32};
 pub use sha2::{Sha256, digest::Digest};
 use subtle::{Choice, ConditionallySelectable};
 use std::str::FromStr;
-pub trait From {
-    fn from_bytes32(data: GenericArray::<u8, U32>) -> Self;
-}
-
-impl From for Fq {
-    fn from_bytes32(bytes: GenericArray<u8, U32>) -> Self {
-    Fq::from(BigUint::from_bytes_be(bytes.as_slice()))
-    }
-}
 
 pub trait FromOkm<const L: usize>: Sized {
     /// Convert a byte sequence into a scalar
@@ -247,7 +238,7 @@ pub fn g1NotZero(x: Fq) -> u64 {
 
 #[allow(non_snake_case)]
 #[allow(dead_code)]
-fn HashToG1(msg: &[u8], dst: &[u8]) -> G1 {
+pub fn HashToG1(msg: &[u8], dst: &[u8]) -> G1 {
     let u = Hash2FieldBN254::hash_to_field(msg, dst, 2);
     let Q0 = MapToCurve1(u[0]);
     let Q1 = MapToCurve1(u[1]);
