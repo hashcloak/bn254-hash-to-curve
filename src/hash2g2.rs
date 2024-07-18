@@ -1,18 +1,11 @@
-use ark_bn254::{fq::Fq, fq2::Fq2, G2Affine};
-// use ark_ec::short_weierstrass::Affine;
-use ark_ff::Field;
+use ark_bn254::{fq::Fq, fq2::Fq2, G2Affine, G2Projective};
+use ark_ff::{Field, BigInteger64};
 use num_bigint::BigUint;
-// use digest::generic_array::GenericArray;
-// use num_integer::Integer;
-// use digest::generic_array::{typenum::U48, typenum::U32};
 pub use sha2::{Sha256, digest::Digest};
-// use subtle::{Choice, ConditionallySelectable};
 use std::str::FromStr;
 use crate::hash2g1;
-// use crate::hash2g1::ExpandMsgSHA256;
 use crate::hash2g1::Hash2FieldBN254;
-// use crate::hash2g1::FromOkm;
-use ark_ec::AffineRepr;
+use ark_ec::{AffineRepr, CurveGroup};
 
 #[allow(non_snake_case)]
 pub fn MapToCurve2(u: Fq2) -> G2Affine {
@@ -150,12 +143,76 @@ pub fn HashToG2(msg: &[u8], dst: &[u8]) -> G2Affine {
         }
     );
 
-    // the value of q matches with gnark-crypto upto here
     let q:G2Affine = (q0 + q1).into();
 
-    q.clear_cofactor()
+    ClearCofactor(q)
 }
 
+// https://github.com/Consensys/gnark-crypto/blob/master/ecc/bn254/g2.go#L624
+#[allow(non_snake_case)]
+pub fn ClearCofactor(q: G2Affine) -> G2Affine {
+    
+    const X_GEN: u64 = 4965661367192848881;
+
+    let mut points = [G2Affine::identity();4];
+
+    let x_gen_scalar = BigInteger64::from(X_GEN);
+
+    points[0] = q.mul_bigint(x_gen_scalar).into();
+
+    points[1] = (points[0] + points[0] + points[0]).into();
+
+    points[1] = psi(&points[1]);
+
+    points[2] = psi(&points[0]);
+    points[2] = psi(&points[2]);
+
+    points[3] = psi(&q);
+    points[3] = psi(&points[3]);
+    points[3] = psi(&points[3]);
+
+    (points[0] + points[1] + points[2] + points[3]).into()
+
+}
+
+
+// ψ(p) = u o π o u⁻¹ where u:E'→E iso from the twist to E
+pub fn psi(a: &G2Affine) -> G2Affine {
+    
+    let a: G2Projective = (*a).into();
+
+    let mut p: G2Projective = G2Affine::identity().into();
+    let endo_u = Fq2{
+        c0: Fq::from_str("21575463638280843010398324269430826099269044274347216827212613867836435027261").unwrap(),
+        c1: Fq::from_str("10307601595873709700152284273816112264069230130616436755625194854815875713954").unwrap()
+    };
+
+    let endo_v = Fq2{
+        c0: Fq::from_str("2821565182194536844548159561693502659359617185244120367078079554186484126554").unwrap(),
+        c1: Fq::from_str("3505843767911556378687030309984248845540243509899259641013678093033130930403").unwrap()
+    };
+
+    p.x = conjugate(&a.x);
+    p.y = conjugate(&a.y);
+    p.z = conjugate(&a.z);
+
+    p.x = p.x * endo_u;
+    p.y = p.y * endo_v;
+
+    p.into_affine()
+}
+
+
+pub fn conjugate(a: &Fq2) -> Fq2 {
+
+    let ax = a.c0;
+    let ay = a.c1;
+
+    Fq2::new(ax, -ay)
+}
+
+
+// Test Vector: https://github.com/Consensys/gnark-crypto/blob/master/ecc/bn254/hash_vectors_test.go
 #[cfg(test)]
 mod tests {
 
@@ -222,21 +279,67 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn HashToCurve2_test() {
-        // use ark_ff::Field;
         let q = HashToG2(b"abc", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
+        // println!("{:?}", q0);
+        let expected = G2Affine::new_unchecked(Fq2{
+            c0: Fq::from_str("10305213714312555419584685236164610766057227018997600762219755820581571775698").unwrap(),
+            c1: Fq::from_str("5140998983273781645596043003996621170933075714207210952317183701750931672829").unwrap()
+        }, Fq2{
+            c0: Fq::from_str("12782657610222102886506935265351398708799194735435757564502179253917869011884").unwrap(),
+            c1: Fq::from_str("15746452850775091549966312821847336261590899319279618339578671846526379873840").unwrap()
+        });
+        assert!(expected.is_on_curve());
         assert!(q.is_on_curve());
+        assert!(q == expected);
+
 
         let q = HashToG2(b"", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
+        let expected = G2Affine::new_unchecked(Fq2{
+            c0: Fq::from_str("7947280525355502288245767042139433332619084425813891508679326584140902765312").unwrap(),
+            c1: Fq::from_str("10530141512348869141982713319207053343182583313484148698392330696376288318261").unwrap()
+        }, Fq2{
+            c0: Fq::from_str("2079515028849057274649333561166551431956364880890028320215862191123161285080").unwrap(),
+            c1: Fq::from_str("20169147323092870078028771345234445157617856249189458168875341276090072581620").unwrap()
+        });
+        assert!(expected.is_on_curve());
         assert!(q.is_on_curve());
+        assert!(q == expected);
 
         let q = HashToG2(b"abcdef0123456789", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
+        let expected = G2Affine::new_unchecked(Fq2{
+            c0: Fq::from_str("9141649584568251133435811655082820452253999683001609355083509727807340928112").unwrap(),
+            c1: Fq::from_str("19241337378620754008094815492162488101811979191715181531381201352430992486769").unwrap()
+        }, Fq2{
+            c0: Fq::from_str("18149222514336885092356998491550186845822771992585824025266466238465484336696").unwrap(),
+            c1: Fq::from_str("9129360097802525322055823374454170177267012396640126715240529872313988489338").unwrap()
+        });
+        assert!(expected.is_on_curve());
         assert!(q.is_on_curve());
+        assert!(q == expected);
 
         let q = HashToG2(b"q128_qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
+        let expected = G2Affine::new_unchecked(Fq2{
+            c0: Fq::from_str("20353650816686918912609727598093385895712524005202794071238544969713808081729").unwrap(),
+            c1: Fq::from_str("17684256473523682464984867199875609280081365245056171175421469718260504681254").unwrap()
+        }, Fq2{
+            c0: Fq::from_str("15896902550098660794387123920782326368527887924690142904247213645779094259076").unwrap(),
+            c1: Fq::from_str("15390867031388969173331373188576779664345770454778413558467452103273727102977").unwrap()
+        });
+        assert!(expected.is_on_curve());
         assert!(q.is_on_curve());
+        assert!(q == expected);
 
         let q = HashToG2(b"a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
+        let expected = G2Affine::new_unchecked(Fq2{
+            c0: Fq::from_str("16357539726107897952076989795377840344861047311782727672153303061989952217690").unwrap(),
+            c1: Fq::from_str("10844839375884734385955874223756004111213539742547007380520745461640534925130").unwrap()
+        }, Fq2{
+            c0: Fq::from_str("20703414994053186684664027241143511234937261254193650036949701479117819278515").unwrap(),
+            c1: Fq::from_str("11278285373922966720757356129051535273988981659843897570823718288010165493815").unwrap()
+        });
+        assert!(expected.is_on_curve());
         assert!(q.is_on_curve());
+        assert!(q == expected);
     }
 
 }
