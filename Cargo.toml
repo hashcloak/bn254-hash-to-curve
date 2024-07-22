@@ -18,3 +18,4 @@ elliptic-curve = "0.13.5"
 subtle = "2.5.0"
 ark-ec = "0.4.2"
 ark-std = "0.4.0"
+constantine-sys = { git = "https://github.com/mratsim/constantine.git", rev = "26109ad4e2ea4b1d6288ffd528b0731a008418c2" }

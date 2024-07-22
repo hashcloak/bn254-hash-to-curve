@@ -159,6 +159,7 @@ dependencies = [
  "ark-ec",
  "ark-ff",
  "ark-std",
+ "constantine-sys",
  "crypto-bigint",
  "digest",
  "elliptic-curve",
@@ -174,6 +175,11 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
+
+[[package]]
+name = "constantine-sys"
+version = "0.1.0"
+source = "git+https://github.com/mratsim/constantine.git?rev=26109ad4e2ea4b1d6288ffd528b0731a008418c2#26109ad4e2ea4b1d6288ffd528b0731a008418c2"
 
 [[package]]
 name = "cpufeatures"

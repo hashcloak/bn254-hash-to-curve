@@ -255,7 +255,12 @@ mod tests {
     use crate::hash2g1::MapToCurve1;
     use crate::hash2g1::G1;
     use crate::hash2g1::HashToG1;
-    
+    use ark_bn254:: G1Projective;
+    use constantine_sys::*;
+    use ark_ec::CurveGroup;
+    use ::core::mem::MaybeUninit;
+    use std::mem;
+
     #[test]
     fn hash2field_test() {
 
@@ -371,4 +376,36 @@ mod tests {
         assert!(q == G1::new(Fq::from_str("763925112321939766609678334678065587309331741428777416269918389033192485838").unwrap(), Fq::from_str("12636771015364464547273606234110225240317241569495907283228710706019336772016").unwrap()));
 
     }
+
+    // differential testing against constantine implementation: https://github.com/mratsim/constantine.git
+    // https://github.com/mratsim/constantine/pull/437
+    #[test]
+    fn hash_to_curve_diff_test(){
+        
+        // constantine output
+        let mut result_constantine = MaybeUninit::<bn254_snarks_g1_jac>::uninit(); 
+        let result_constantine_aff: G1 = unsafe {
+            ctt_bn254_snarks_g1_jac_svdw_sha256(
+                result_constantine.as_mut_ptr(),
+                b"" as *const u8 ,
+                0,
+                b"abc" as *const u8,
+                3,
+                b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_" as *const u8 ,
+                47
+            );
+            
+            let result_constantine_sys = mem::transmute::<MaybeUninit<bn254_snarks_g1_jac>, G1Projective>(result_constantine);
+            result_constantine_sys.into_affine()
+        };
+        
+
+        // native implementation output
+        let result = HashToG1(b"abc", b"QUUX-V01-CS02-with-BN254G1_XMD:SHA-256_SVDW_RO_");
+
+        //match the result
+        assert_eq!(result, result_constantine_aff);
+
+    }
+
 }
