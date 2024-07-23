@@ -148,7 +148,7 @@ pub fn HashToG2(msg: &[u8], dst: &[u8]) -> G2Affine {
     ClearCofactor(q)
 }
 
-// https://github.com/Consensys/gnark-crypto/blob/master/ecc/bn254/g2.go#L624
+// https://github.com/Consensys/gnark-crypto/blob/master/ecc/bn254/g2.go#L635
 #[allow(non_snake_case)]
 pub fn ClearCofactor(q: G2Affine) -> G2Affine {
     
@@ -222,7 +222,12 @@ mod tests {
     use crate::hash2g2::MapToCurve2;
     use crate::hash2g2::Fq;
     use crate::hash2g2::HashToG2;
-    // use ark_ff::Field;
+    use ark_bn254::G2Projective;
+    use constantine_sys::*;
+    use ark_ec::CurveGroup;
+    use ::core::mem::MaybeUninit;
+    use std::mem;
+
     #[test]
     #[allow(non_snake_case)]
     fn MapToCurve2_test() {
@@ -340,6 +345,37 @@ mod tests {
         assert!(expected.is_on_curve());
         assert!(q.is_on_curve());
         assert!(q == expected);
+    }
+
+    // differential testing against constantine implementation: https://github.com/mratsim/constantine.git
+    // https://github.com/mratsim/constantine/pull/437
+
+    #[ignore = "differential test failing"]
+    #[test]
+    fn hash_to_curve_diff_test_g2(){
+
+        // constantine output
+        let mut result_constantine = MaybeUninit::<bn254_snarks_g2_jac>::uninit(); 
+        let result_constantine_aff: G2Affine = unsafe {
+            ctt_bn254_snarks_g2_jac_svdw_sha256(
+                result_constantine.as_mut_ptr(),
+                b"" as *const u8 ,
+                0,
+                b"abc" as *const u8,
+                3,
+                b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_" as *const u8 ,
+                47
+            );
+            
+            let result_constantine_sys = mem::transmute::<MaybeUninit<bn254_snarks_g2_jac>, G2Projective>(result_constantine);
+            result_constantine_sys.into_affine()
+        };
+        
+        // native implementation output
+        let result = HashToG2(b"abc", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
+
+        //match the result
+        assert_eq!(result, result_constantine_aff);
     }
 
 }

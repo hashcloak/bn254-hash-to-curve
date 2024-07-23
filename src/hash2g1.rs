@@ -237,7 +237,6 @@ pub fn g1NotZero(x: Fq) -> u64 {
 }
 
 #[allow(non_snake_case)]
-#[allow(dead_code)]
 pub fn HashToG1(msg: &[u8], dst: &[u8]) -> G1 {
     let u = Hash2FieldBN254::hash_to_field(msg, dst, 2);
     let Q0 = MapToCurve1(u[0]);
@@ -380,7 +379,7 @@ mod tests {
     // differential testing against constantine implementation: https://github.com/mratsim/constantine.git
     // https://github.com/mratsim/constantine/pull/437
     #[test]
-    fn hash_to_curve_diff_test(){
+    fn hash_to_curve_diff_test_g1(){
         
         // constantine output
         let mut result_constantine = MaybeUninit::<bn254_snarks_g1_jac>::uninit(); 
