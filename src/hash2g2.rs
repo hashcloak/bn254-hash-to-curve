@@ -7,6 +7,97 @@ use crate::hash2g1;
 use crate::hash2g1::Hash2FieldBN254;
 use ark_ec::{AffineRepr, CurveGroup};
 
+#[cfg(feature = "constantine_compatible")]
+#[allow(non_snake_case)]
+pub fn MapToCurve2(u: Fq2) -> G2Affine {
+
+    //constants
+	//c1 = g(Z)
+	//c2 = -Z / 2
+	//c3 = sqrt(-g(Z) * (3 * Z² + 4 * A))     # sgn0(c3) MUST equal 0
+	//c4 = -4 * g(Z) / (3 * Z² + 4 * A)
+
+    let z = Fq2{
+        c0: Fq::from_str("0").unwrap(), 
+        c1: Fq::from_str("1").unwrap()
+    };
+
+    let c1 = Fq2{
+        c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), 
+        c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636689").unwrap()
+    };
+
+    let c2 = Fq2{
+        c0: Fq::from_str("0").unwrap() * Fq::from(Fq::R).inverse().unwrap(), 
+        c1: Fq::from_str("10944121435919637611123202872628637544348155578648911831344518947322613104291").unwrap()
+    };
+
+    let c3 = Fq2{
+        c0: Fq::from_str("8270257801618377462829664163334948115088143961679076698731296916415895764198").unwrap(), 
+        c1: Fq::from_str("15403170217607925661891511707918230497750592932893890913125906786266381721360").unwrap()
+    };
+
+    let c4 = Fq2{
+        c0: Fq::from_str("18685085378399381287283517099609868978155387573303020199856495763721534568303").unwrap(), 
+        c1: Fq::from_str("355906388159988214995876516183045123393435953777200384759171347880410182252").unwrap()
+    };
+
+    let mut tv1 = u.square();
+    tv1 = tv1 * c1;
+
+    let tv2 = Fq2::ONE + tv1;
+
+    tv1 = Fq2::ONE - tv1;
+    let mut tv3 = tv1 * tv2;
+
+    tv3 = tv3.inverse().unwrap();
+    let mut tv4 = u * tv1;
+    tv4 = tv4 * tv3;
+    tv4 = tv4 * c3;
+    let x1 = c2 - tv4;
+
+    let mut gx1 = x1.square();
+    gx1 = gx1 * x1;
+    gx1 = gx1 + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};
+
+    let x2 = c2 + tv4;
+    let mut gx2 = x2.square();
+    gx2 = gx2 * x2;
+    gx2 = gx2 + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};
+
+    let mut x3 = tv2.square();
+    x3 = x3 * tv3;
+    x3 = x3.square();
+    x3 = x3 * c4;
+
+    x3 = x3 + z;
+
+    let mut x = if gx1.legendre().is_qr() {x1} else {x3};
+    x = if gx2.legendre().is_qr() && !gx1.legendre().is_qr(){x2} else {x};
+
+    let mut gx = x.square();
+    gx = gx * x;
+    gx = gx + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};
+
+    let mut y = gx.sqrt().unwrap();
+
+    #[allow(non_snake_case)]
+    let signsNotEqual = g2Sgn0(u) ^ g2Sgn0(y);
+    tv1 = Fq2::ZERO - y;
+
+    if signsNotEqual == 0 {y = y} else {y = tv1};
+    
+    let res = G2Affine::new_unchecked(x, y);
+
+    if !res.is_on_curve() {
+        panic!("Point not on curve")
+    }
+
+    res
+
+}
+
+#[cfg(feature = "gnark_crypto_compatible")]
 #[allow(non_snake_case)]
 pub fn MapToCurve2(u: Fq2) -> G2Affine {
 
@@ -228,6 +319,7 @@ pub fn EncodeToG2(msg: &[u8], dst: &[u8]) -> G2Affine {
 
 
 // Test Vector: https://github.com/Consensys/gnark-crypto/blob/master/ecc/bn254/hash_vectors_test.go
+#[cfg(feature = "gnark_crypto_compatible")]
 #[cfg(test)]
 mod tests {
 
@@ -237,11 +329,6 @@ mod tests {
     use crate::hash2g2::MapToCurve2;
     use crate::hash2g2::Fq;
     use crate::hash2g2::HashToG2;
-    use ark_bn254::G2Projective;
-    use constantine_sys::*;
-    use ark_ec::CurveGroup;
-    use ::core::mem::MaybeUninit;
-    use std::mem;
     use crate::hash2g2::EncodeToG2;
 
     #[test]
@@ -363,37 +450,6 @@ mod tests {
         assert!(q == expected);
     }
 
-    // differential testing against constantine implementation: https://github.com/mratsim/constantine.git
-    // https://github.com/mratsim/constantine/pull/437
-
-    #[ignore = "differential test failing"]
-    #[test]
-    fn hash_to_curve_diff_test_g2(){
-
-        // constantine output
-        let mut result_constantine = MaybeUninit::<bn254_snarks_g2_jac>::uninit(); 
-        let result_constantine_aff: G2Affine = unsafe {
-            ctt_bn254_snarks_g2_jac_svdw_sha256(
-                result_constantine.as_mut_ptr(),
-                b"" as *const u8 ,
-                0,
-                b"abc" as *const u8,
-                3,
-                b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_" as *const u8 ,
-                47
-            );
-            
-            let result_constantine_sys = mem::transmute::<MaybeUninit<bn254_snarks_g2_jac>, G2Projective>(result_constantine);
-            result_constantine_sys.into_affine()
-        };
-        
-        // native implementation output
-        let result = HashToG2(b"abc", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
-
-        //match the result
-        assert_eq!(result, result_constantine_aff);
-    }
-
     #[test]
     fn encode_to_g2_test(){
 
@@ -456,5 +512,47 @@ mod tests {
         assert!(expected.is_on_curve());
         assert!(q.is_on_curve());
         assert!(q == expected);
+    }
+}
+
+
+#[cfg(feature = "constantine_compatible")]
+#[cfg(test)]
+mod tests {
+
+    use ark_bn254::G2Affine;
+    use crate::hash2g2::HashToG2;
+    use ark_bn254::G2Projective;
+    use constantine_sys::*;
+    use ark_ec::CurveGroup;
+    use ::core::mem::MaybeUninit;
+    use std::mem;
+    // differential testing against constantine implementation: https://github.com/mratsim/constantine.git
+    // https://github.com/mratsim/constantine/pull/437
+    #[test]
+    fn hash_to_curve_diff_test_g2(){
+
+        // constantine output
+        let mut result_constantine = MaybeUninit::<bn254_snarks_g2_jac>::uninit(); 
+        let result_constantine_aff: G2Affine = unsafe {
+            ctt_bn254_snarks_g2_jac_svdw_sha256(
+                result_constantine.as_mut_ptr(),
+                b"" as *const u8 ,
+                0,
+                b"abc" as *const u8,
+                3,
+                b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_" as *const u8 ,
+                47
+            );
+            
+            let result_constantine_sys = mem::transmute::<MaybeUninit<bn254_snarks_g2_jac>, G2Projective>(result_constantine);
+            result_constantine_sys.into_affine()
+        };
+        
+        // native implementation output
+        let result = HashToG2(b"abc", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_RO_");
+
+        //match the result
+        assert_eq!(result, result_constantine_aff);
     }
 }
