@@ -255,11 +255,6 @@ mod tests {
     use crate::hash2g1::MapToCurve1;
     use crate::hash2g1::G1;
     use crate::hash2g1::HashToG1;
-    use ark_bn254:: G1Projective;
-    use constantine_sys::*;
-    use ark_ec::CurveGroup;
-    use ::core::mem::MaybeUninit;
-    use std::mem;
 
     #[test]
     fn hash2field_test() {
@@ -376,8 +371,21 @@ mod tests {
         assert!(q == G1::new(Fq::from_str("763925112321939766609678334678065587309331741428777416269918389033192485838").unwrap(), Fq::from_str("12636771015364464547273606234110225240317241569495907283228710706019336772016").unwrap()));
 
     }
+}
 
-    // differential testing against constantine implementation: https://github.com/mratsim/constantine.git
+
+#[cfg(feature = "constantine_compatible")]
+#[cfg(test)]
+mod tests {
+
+    use crate::hash2g1::G1;
+    use crate::hash2g1::HashToG1;
+    use ark_bn254:: G1Projective;
+    use constantine_sys::*;
+    use ark_ec::CurveGroup;
+    use ::core::mem::MaybeUninit;
+    use std::mem;
+// differential testing against constantine implementation: https://github.com/mratsim/constantine.git
     // https://github.com/mratsim/constantine/pull/437
     #[test]
     fn hash_to_curve_diff_test_g1(){
@@ -407,5 +415,4 @@ mod tests {
         assert_eq!(result, result_constantine_aff);
 
     }
-
 }
