@@ -211,6 +211,21 @@ pub fn conjugate(a: &Fq2) -> Fq2 {
     Fq2::new(ax, -ay)
 }
 
+// EncodeToG2 hashes a message to a point on the G2 curve using the SVDW map.
+// It is faster than HashToG2, but the result is not uniformly distributed. Unsuitable as a random oracle.
+
+#[allow(non_snake_case)]
+pub fn EncodeToG2(msg: &[u8], dst: &[u8]) -> G2Affine {
+
+    let u = Fq::hash_to_field(msg, dst, 2);
+    let res = MapToCurve2(Fq2{
+        c0: u[0],
+        c1: u[1],
+    });
+
+    ClearCofactor(res)
+}
+
 
 // Test Vector: https://github.com/Consensys/gnark-crypto/blob/master/ecc/bn254/hash_vectors_test.go
 #[cfg(test)]
@@ -227,6 +242,7 @@ mod tests {
     use ark_ec::CurveGroup;
     use ::core::mem::MaybeUninit;
     use std::mem;
+    use crate::hash2g2::EncodeToG2;
 
     #[test]
     #[allow(non_snake_case)]
@@ -378,4 +394,67 @@ mod tests {
         assert_eq!(result, result_constantine_aff);
     }
 
+    #[test]
+    fn encode_to_g2_test(){
+
+        let q = EncodeToG2(b"abc", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_NU_");
+        let expected = G2Affine::new_unchecked(Fq2{
+            c0: Fq::from_str("7290337032722028742894312496454770035215478865307401781131202361899492945880").unwrap(),
+            c1: Fq::from_str("18605632812439984129247614998320701910992924251662446522071513278020164236983").unwrap()
+        }, Fq2{
+            c0: Fq::from_str("18565926515830203734257806009639634340842708214357641080049757818108383758101").unwrap(),
+            c1: Fq::from_str("21026435153745179081072575128771379049563093023676092614267505429710510687357").unwrap()
+        });
+        assert!(expected.is_on_curve());
+        assert!(q.is_on_curve());
+        assert!(q == expected);
+
+        let q = EncodeToG2(b"", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_NU_");
+        let expected = G2Affine::new_unchecked(Fq2{
+            c0: Fq::from_str("2222545202255207121622252341720884612662004487208664408317925491033383016781").unwrap(),
+            c1: Fq::from_str("3167015911722190124689644160541231412539898594125261078778351544051685395067").unwrap()
+        }, Fq2{
+            c0: Fq::from_str("20450065928984038040963910334909877834263207751235246619699259708122680403961").unwrap(),
+            c1: Fq::from_str("4743914079645712786687283872900604142971897405422186449887746314931053675188").unwrap()
+        });
+        assert!(expected.is_on_curve());
+        assert!(q.is_on_curve());
+        assert!(q == expected);
+
+        let q = EncodeToG2(b"abcdef0123456789", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_NU_");
+        let expected = G2Affine::new_unchecked(Fq2{
+            c0: Fq::from_str("7148036967840401493869354348463445038937751410382870212181508408551260940454").unwrap(),
+            c1: Fq::from_str("20374759774184409322905764368361574346849498692562411327726753719663647349306").unwrap()
+        }, Fq2{
+            c0: Fq::from_str("10483260641720359876745669935893009958901176103433938324656495809668720301952").unwrap(),
+            c1: Fq::from_str("4967329811281913502786824686629199594924414673725274625361393684486574196665").unwrap()
+        });
+        assert!(expected.is_on_curve());
+        assert!(q.is_on_curve());
+        assert!(q == expected);
+
+        let q = EncodeToG2(b"q128_qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_NU_");
+        let expected = G2Affine::new_unchecked(Fq2{
+            c0: Fq::from_str("13125957534682971537993382516266248139111688303006779518993454727694490448781").unwrap(),
+            c1: Fq::from_str("17001778660286232066011321802406169530508086950847889879278742058506410997887").unwrap()
+        }, Fq2{
+            c0: Fq::from_str("21493575647416678969105094342755094397493417994062452257278523992404807814786").unwrap(),
+            c1: Fq::from_str("17949331872970707337957877677444470806317301863003904868354967532347837920323").unwrap()
+        });
+        assert!(expected.is_on_curve());
+        assert!(q.is_on_curve());
+        assert!(q == expected);
+
+        let q = EncodeToG2(b"a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", b"QUUX-V01-CS02-with-BN254G2_XMD:SHA-256_SVDW_NU_");
+        let expected = G2Affine::new_unchecked(Fq2{
+            c0: Fq::from_str("549777038834003445090108363667568008543458018879702424802185895608634070183").unwrap(),
+            c1: Fq::from_str("17241878747514914600777537647804966909993790648100169250922892401106734291369").unwrap()
+        }, Fq2{
+            c0: Fq::from_str("8654939251469409238390702955149995024930650667376373847357704134187240104302").unwrap(),
+            c1: Fq::from_str("3048816029845140188911702407210291715056845238089676496464503410870814591366").unwrap()
+        });
+        assert!(expected.is_on_curve());
+        assert!(q.is_on_curve());
+        assert!(q == expected);
+    }
 }
