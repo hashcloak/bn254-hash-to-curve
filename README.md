@@ -4,11 +4,11 @@ This repository provides an implementation of the hash-to-curve function for the
 
 ## Building and Testing
 
-To build gnark-crypto compatibility: `cargo build --features "gnark_crypto_compatible"`
-To build constantine compatibility: `cargo build --features "constantine_compatible"`
+- To build gnark-crypto compatibility: `cargo build --features "gnark_crypto_compatible"`
+- To build constantine compatibility: `cargo build --features "constantine_compatible"`
 
-To test gnark-crypto compatibility: `cargo test --features "gnark_crypto_compatible"`
-To test constantine compatibility: `cargo test --features "constantine_compatible"`
+- To test gnark-crypto compatibility: `cargo test --features "gnark_crypto_compatible"`
+- To test constantine compatibility: `cargo test --features "constantine_compatible"`
 
 ## Overview
 
