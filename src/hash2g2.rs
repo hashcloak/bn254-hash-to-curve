@@ -7,15 +7,15 @@ use crate::hash2g1;
 use crate::hash2g1::Hash2FieldBN254;
 use ark_ec::{AffineRepr, CurveGroup};
 
+// MapToCurve2 implements the Shallue and van de Woestijne method, applicable to any elliptic curve in Weierstrass form
+// No cofactor clearing or isogeny
+// https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#straightline-svdw
 #[cfg(feature = "constantine_compatible")]
 #[allow(non_snake_case)]
 pub fn MapToCurve2(u: Fq2) -> G2Affine {
 
-    //constants
-	//c1 = g(Z)
-	//c2 = -Z / 2
-	//c3 = sqrt(-g(Z) * (3 * Z² + 4 * A))     # sgn0(c3) MUST equal 0
-	//c4 = -4 * g(Z) / (3 * Z² + 4 * A)
+    // constants
+    // https://github.com/mratsim/constantine/blob/master/constantine/named/constants/bn254_snarks_hash_to_curve_g2.nim
 
     let z = Fq2{
         c0: Fq::from_str("0").unwrap(), 
@@ -42,50 +42,53 @@ pub fn MapToCurve2(u: Fq2) -> G2Affine {
         c1: Fq::from_str("355906388159988214995876516183045123393435953777200384759171347880410182252").unwrap()
     };
 
-    let mut tv1 = u.square();
-    tv1 = tv1 * c1;
+    let mut tv1 = u.square();       //    1.  tv1 = u²
+    tv1 = tv1 * c1;                 //    2.  tv1 = tv1 * c1
 
-    let tv2 = Fq2::ONE + tv1;
+    let tv2 = Fq2::ONE + tv1;       //    3.  tv2 = 1 + tv1
 
-    tv1 = Fq2::ONE - tv1;
-    let mut tv3 = tv1 * tv2;
+    tv1 = Fq2::ONE - tv1;           //    4.  tv1 = 1 - tv1
+    let mut tv3 = tv1 * tv2;        //    5.  tv3 = tv1 * tv2
 
-    tv3 = tv3.inverse().unwrap();
-    let mut tv4 = u * tv1;
-    tv4 = tv4 * tv3;
-    tv4 = tv4 * c3;
-    let x1 = c2 - tv4;
+    tv3 = tv3.inverse().unwrap();   //    6.  tv3 = inv0(tv3)
+    let mut tv4 = u * tv1;          //    7.  tv4 = u * tv1
+    tv4 = tv4 * tv3;                //    8.  tv4 = tv4 * tv3
+    tv4 = tv4 * c3;                 //    9.  tv4 = tv4 * c3
+    let x1 = c2 - tv4;              //    10.  x1 = c2 - tv4
 
-    let mut gx1 = x1.square();
-    gx1 = gx1 * x1;
-    gx1 = gx1 + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};
+    let mut gx1 = x1.square();      //    11. gx1 = x1²
+    //12. gx1 = gx1 + A     All curves in gnark-crypto have A=0 (j-invariant=0). It is crucial to include this step if the curve has nonzero A coefficient.
+    gx1 = gx1 * x1;                 //    13. gx1 = gx1 * x1
+    gx1 = gx1 + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};  //    14. gx1 = gx1 + B
 
-    let x2 = c2 + tv4;
-    let mut gx2 = x2.square();
-    gx2 = gx2 * x2;
-    gx2 = gx2 + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};
+    let x2 = c2 + tv4;              //    15.  x2 = c2 + tv4
+    let mut gx2 = x2.square();      //    16. gx2 = x2²
+    //    17. gx2 = gx2 + A (see 12.)
+    gx2 = gx2 * x2;                 //    18. gx2 = gx2 * x2
+    gx2 = gx2 + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};  //    19. gx2 = gx2 + B
 
-    let mut x3 = tv2.square();
-    x3 = x3 * tv3;
-    x3 = x3.square();
-    x3 = x3 * c4;
+    let mut x3 = tv2.square();      //    20.  x3 = tv2²
+    x3 = x3 * tv3;                  //    21.  x3 = x3 * tv3
+    x3 = x3.square();               //    22.  x3 = x3²
+    x3 = x3 * c4;                   //    23.  x3 = x3 * c4
 
-    x3 = x3 + z;
+    x3 = x3 + z;                    //    24.  x3 = x3 + Z
 
-    let mut x = if gx1.legendre().is_qr() {x1} else {x3};
-    x = if gx2.legendre().is_qr() && !gx1.legendre().is_qr(){x2} else {x};
+    let mut x = if gx1.legendre().is_qr() {x1} else {x3};   //    25.   x = CMOV(x3, x1, e1)   # x = x1 if gx1 is square, else x = x3
+    x = if gx2.legendre().is_qr() && !gx1.legendre().is_qr(){x2} else {x};      //    26.   x = CMOV(x, x2, e2)    # x = x2 if gx2 is square and gx1 is not
 
-    let mut gx = x.square();
-    gx = gx * x;
-    gx = gx + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};
+    let mut gx = x.square();        //    27.  gx = x²
+    //    28.  gx = gx + A
+    gx = gx * x;                    //    29.  gx = gx * x
+    gx = gx + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};    //    30.  gx = gx + B
 
-    let mut y = gx.sqrt().unwrap();
+    let mut y = gx.sqrt().unwrap(); //    31.   y = sqrt(gx)
 
     #[allow(non_snake_case)]
-    let signsNotEqual = g2Sgn0(u) ^ g2Sgn0(y);
+    let signsNotEqual = g2Sgn0(u) ^ g2Sgn0(y);  //    32.  e3 = sgn0(u) == sgn0(y)
     tv1 = Fq2::ZERO - y;
 
-    if signsNotEqual == 0 {y = y} else {y = tv1};
+    if signsNotEqual == 0 {y = y} else {y = tv1};   //    33.   y = CMOV(-y, y, e3)       # Select correct sign of y
     
     let res = G2Affine::new_unchecked(x, y);
 
@@ -97,11 +100,14 @@ pub fn MapToCurve2(u: Fq2) -> G2Affine {
 
 }
 
+// MapToCurve2 implements the Shallue and van de Woestijne method, applicable to any elliptic curve in Weierstrass form
+// No cofactor clearing or isogeny
+// https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#straightline-svdw
 #[cfg(feature = "gnark_crypto_compatible")]
 #[allow(non_snake_case)]
 pub fn MapToCurve2(u: Fq2) -> G2Affine {
 
-    //constants
+    //constants: https://github.com/Consensys/gnark-crypto/blob/master/ecc/bn254/hash_to_g2.go#L33
 	//c1 = g(Z)
 	//c2 = -Z / 2
 	//c3 = sqrt(-g(Z) * (3 * Z² + 4 * A))     # sgn0(c3) MUST equal 0
@@ -132,50 +138,53 @@ pub fn MapToCurve2(u: Fq2) -> G2Affine {
         c1: Fq::from_str("21130322481901740787616774064142360811676414460802878397485299194159459008019").unwrap() * Fq::from(Fq::R).inverse().unwrap()
     };
 
-    let mut tv1 = u.square();
-    tv1 = tv1 * c1;
+    let mut tv1 = u.square();       //    1.  tv1 = u²
+    tv1 = tv1 * c1;                 //    2.  tv1 = tv1 * c1
 
-    let tv2 = Fq2::ONE + tv1;
+    let tv2 = Fq2::ONE + tv1;       //    3.  tv2 = 1 + tv1
 
-    tv1 = Fq2::ONE - tv1;
-    let mut tv3 = tv1 * tv2;
+    tv1 = Fq2::ONE - tv1;           //    4.  tv1 = 1 - tv1
+    let mut tv3 = tv1 * tv2;        //    5.  tv3 = tv1 * tv2
 
-    tv3 = tv3.inverse().unwrap();
-    let mut tv4 = u * tv1;
-    tv4 = tv4 * tv3;
-    tv4 = tv4 * c3;
-    let x1 = c2 - tv4;
+    tv3 = tv3.inverse().unwrap();   //    6.  tv3 = inv0(tv3)
+    let mut tv4 = u * tv1;          //    7.  tv4 = u * tv1
+    tv4 = tv4 * tv3;                //    8.  tv4 = tv4 * tv3
+    tv4 = tv4 * c3;                 //    9.  tv4 = tv4 * c3
+    let x1 = c2 - tv4;              //    10.  x1 = c2 - tv4
 
-    let mut gx1 = x1.square();
-    gx1 = gx1 * x1;
-    gx1 = gx1 + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};
+    let mut gx1 = x1.square();      //    11. gx1 = x1²
+    //12. gx1 = gx1 + A     All curves in gnark-crypto have A=0 (j-invariant=0). It is crucial to include this step if the curve has nonzero A coefficient.
+    gx1 = gx1 * x1;                 //    13. gx1 = gx1 * x1
+    gx1 = gx1 + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};  //    14. gx1 = gx1 + B
 
-    let x2 = c2 + tv4;
-    let mut gx2 = x2.square();
-    gx2 = gx2 * x2;
-    gx2 = gx2 + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};
+    let x2 = c2 + tv4;              //    15.  x2 = c2 + tv4
+    let mut gx2 = x2.square();      //    16. gx2 = x2²
+    //    17. gx2 = gx2 + A (see 12.)
+    gx2 = gx2 * x2;                 //    18. gx2 = gx2 * x2
+    gx2 = gx2 + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};  //    19. gx2 = gx2 + B
 
-    let mut x3 = tv2.square();
-    x3 = x3 * tv3;
-    x3 = x3.square();
-    x3 = x3 * c4;
+    let mut x3 = tv2.square();      //    20.  x3 = tv2²
+    x3 = x3 * tv3;                  //    21.  x3 = x3 * tv3
+    x3 = x3.square();               //    22.  x3 = x3²
+    x3 = x3 * c4;                   //    23.  x3 = x3 * c4
 
-    x3 = x3 + z;
+    x3 = x3 + z;                    //    24.  x3 = x3 + Z
 
-    let mut x = if gx1.legendre().is_qr() {x1} else {x3};
-    x = if gx2.legendre().is_qr() && !gx1.legendre().is_qr(){x2} else {x};
+    let mut x = if gx1.legendre().is_qr() {x1} else {x3};   //    25.   x = CMOV(x3, x1, e1)   # x = x1 if gx1 is square, else x = x3
+    x = if gx2.legendre().is_qr() && !gx1.legendre().is_qr(){x2} else {x};      //    26.   x = CMOV(x, x2, e2)    # x = x2 if gx2 is square and gx1 is not
 
-    let mut gx = x.square();
-    gx = gx * x;
-    gx = gx + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};
+    let mut gx = x.square();        //    27.  gx = x²
+    //    28.  gx = gx + A
+    gx = gx * x;                    //    29.  gx = gx * x
+    gx = gx + Fq2{c0: Fq::from_str("19485874751759354771024239261021720505790618469301721065564631296452457478373").unwrap(), c1: Fq::from_str("266929791119991161246907387137283842545076965332900288569378510910307636690").unwrap()};    //    30.  gx = gx + B
 
-    let mut y = gx.sqrt().unwrap();
+    let mut y = gx.sqrt().unwrap(); //    31.   y = sqrt(gx)
 
     #[allow(non_snake_case)]
-    let signsNotEqual = g2Sgn0(u) ^ g2Sgn0(y);
+    let signsNotEqual = g2Sgn0(u) ^ g2Sgn0(y);  //    32.  e3 = sgn0(u) == sgn0(y)
     tv1 = Fq2::ZERO - y;
 
-    if signsNotEqual == 0 {y = y} else {y = tv1};
+    if signsNotEqual == 0 {y = y} else {y = tv1};   //    33.   y = CMOV(-y, y, e3)       # Select correct sign of y
     
     let res = G2Affine::new_unchecked(x, y);
 
@@ -187,6 +196,9 @@ pub fn MapToCurve2(u: Fq2) -> G2Affine {
 
 }
 
+// g2Sgn0 is an algebraic substitute for the notion of sign in ordered fields
+// Namely, every non-zero quadratic residue in a finite field of characteristic =/= 2 has exactly two square roots, one of each sign
+// https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#name-the-sgn0-function
 #[allow(non_snake_case)]
 pub fn g2Sgn0(u: Fq2) -> u64 {
     let mut sign = 0u64;
@@ -215,7 +227,16 @@ pub fn g2NotZero(x: Fq2) -> u64 {
 
 }
 
+// MapToG2 invokes the SVDW map, and guarantees that the result is in g2
+#[allow(non_snake_case)]
+pub fn MapToG2(u: Fq2) -> G2Affine {
+	let res = MapToCurve2(u);
+	ClearCofactor(res)
+}
 
+// HashToG2 hashes a message to a point on the G2 curve using the SVDW map.
+// Slower than EncodeToG2, but usable as a random oracle.
+// https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#roadmap
 #[allow(non_snake_case)]
 pub fn HashToG2(msg: &[u8], dst: &[u8]) -> G2Affine {
     let u = Fq::hash_to_field(msg, dst, 4);
@@ -304,7 +325,7 @@ pub fn conjugate(a: &Fq2) -> Fq2 {
 
 // EncodeToG2 hashes a message to a point on the G2 curve using the SVDW map.
 // It is faster than HashToG2, but the result is not uniformly distributed. Unsuitable as a random oracle.
-
+// https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#roadmap
 #[allow(non_snake_case)]
 pub fn EncodeToG2(msg: &[u8], dst: &[u8]) -> G2Affine {
 
