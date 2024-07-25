@@ -540,7 +540,8 @@ mod tests {
 #[cfg(feature = "constantine_compatible")]
 #[cfg(test)]
 mod tests {
-
+    extern crate constantine_sys;
+    
     use ark_bn254::G2Affine;
     use crate::hash2g2::HashToG2;
     use ark_bn254::G2Projective;

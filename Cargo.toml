@@ -2,6 +2,13 @@
 name = "bn254_hash2curve"
 version = "0.1.0"
 edition = "2021"
+authors = ["Manish <https://github.com/man2706kum>", "HashCloak <https://github.com/hashcloak>"]
+description = "hash-to-curve for the BN254 elliptic curve"
+readme = "README.md"
+repository = "https://github.com/hashcloak/bn254-hash-to-curve"
+license = "MIT AND Apache-2.0"
+keywords = ["cryptography", "elliptic curves", "hash-to-curve", "hashing", "bn254"]
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -16,6 +23,8 @@ num-integer = "0.1.45"
 elliptic-curve = "0.13.5"
 subtle = "2.5.0"
 ark-ec = "0.4.2"
+
+[dev-dependencies]
 constantine-sys = { git = "https://github.com/mratsim/constantine.git", rev = "26109ad4e2ea4b1d6288ffd528b0731a008418c2" }
 
 [features]
