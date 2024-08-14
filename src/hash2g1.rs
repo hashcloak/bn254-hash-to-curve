@@ -245,7 +245,7 @@ pub fn HashToG1(msg: &[u8], dst: &[u8]) -> G1 {
     Q.into()
 }
 
-#[cfg(feature = "gnark_crypto_compatible")]
+#[cfg(all(feature = "gnark_crypto_compatible"))]
 #[cfg(test)]
 mod tests {
 
@@ -373,8 +373,7 @@ mod tests {
     }
 }
 
-
-#[cfg(feature = "constantine_compatible")]
+#[cfg(all(feature = "constantine_compatible", not(feature = "gnark_crypto_compatible")))]
 #[cfg(test)]
 mod tests {
 

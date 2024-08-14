@@ -10,7 +10,7 @@ use ark_ec::{AffineRepr, CurveGroup};
 // MapToCurve2 implements the Shallue and van de Woestijne method, applicable to any elliptic curve in Weierstrass form
 // No cofactor clearing or isogeny
 // https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#straightline-svdw
-#[cfg(feature = "constantine_compatible")]
+#[cfg(all(feature = "constantine_compatible", not(feature = "gnark_crypto_compatible")))]
 #[allow(non_snake_case)]
 pub fn MapToCurve2(u: Fq2) -> G2Affine {
 
@@ -103,7 +103,7 @@ pub fn MapToCurve2(u: Fq2) -> G2Affine {
 // MapToCurve2 implements the Shallue and van de Woestijne method, applicable to any elliptic curve in Weierstrass form
 // No cofactor clearing or isogeny
 // https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#straightline-svdw
-#[cfg(feature = "gnark_crypto_compatible")]
+#[cfg(all(feature = "gnark_crypto_compatible"))]
 #[allow(non_snake_case)]
 pub fn MapToCurve2(u: Fq2) -> G2Affine {
 
@@ -340,7 +340,7 @@ pub fn EncodeToG2(msg: &[u8], dst: &[u8]) -> G2Affine {
 
 
 // Test Vector: https://github.com/Consensys/gnark-crypto/blob/master/ecc/bn254/hash_vectors_test.go
-#[cfg(feature = "gnark_crypto_compatible")]
+#[cfg(all(feature = "gnark_crypto_compatible"))]
 #[cfg(test)]
 mod tests {
 
@@ -536,8 +536,7 @@ mod tests {
     }
 }
 
-
-#[cfg(feature = "constantine_compatible")]
+#[cfg(all(feature = "constantine_compatible", not(feature = "gnark_crypto_compatible")))]
 #[cfg(test)]
 mod tests {
     extern crate constantine_sys;
