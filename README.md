@@ -1,4 +1,5 @@
 # BN254 Hash-to-Curve
+[![](https://img.shields.io/crates/v/bn254_hash2curve.svg)](https://crates.io/crates/bn254_hash2curve) 
 
 This repository provides implementation of the hash-to-curve for the BN254 elliptic curve, compatible with the [gnark-crypto](https://github.com/Consensys/gnark-crypto/tree/master/ecc/bn254) as well as [constantine](https://github.com/mratsim/constantine) library.
 

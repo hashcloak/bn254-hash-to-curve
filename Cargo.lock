@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "bn254_hash2curve"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ark-bn254",
  "ark-ec",

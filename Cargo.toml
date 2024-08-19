@@ -1,6 +1,6 @@
 [package]
 name = "bn254_hash2curve"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Manish <https://github.com/man2706kum>", "HashCloak <https://github.com/hashcloak>"]
 description = "hash-to-curve for the BN254 elliptic curve"
