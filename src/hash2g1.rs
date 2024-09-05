@@ -65,7 +65,7 @@ impl ExpandMsgSHA256 for Fq {
             .chain_update([dst.len() as u8])
             .finalize();
 
-        let mut buf = [0u8; 4 * 48];
+        let mut buf = vec![0u8; LEN_IN_BYTES];
         let mut offset = 0;
 
         for i in 1..ell {
