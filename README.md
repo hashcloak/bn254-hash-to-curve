@@ -1,5 +1,6 @@
 # BN254 Hash-to-Curve
-[![](https://img.shields.io/crates/v/bn254_hash2curve.svg)](https://crates.io/crates/bn254_hash2curve) 
+
+[![](https://img.shields.io/crates/v/bn254_hash2curve.svg)](https://crates.io/crates/bn254_hash2curve)
 
 This repository provides implementation of the hash-to-curve for the BN254 elliptic curve, compatible with the [gnark-crypto](https://github.com/Consensys/gnark-crypto/tree/master/ecc/bn254) as well as [constantine](https://github.com/mratsim/constantine) library.
 
@@ -15,11 +16,11 @@ This repository provides implementation of the hash-to-curve for the BN254 ellip
 
 Add this library under dependencies in the Cargo.toml of your project:
 
-`bn254_hash2curve = { git = "https://github.com/hashcloak/bn254-hash-to-curve.git", features = ["constantine_compatible"]}` 
+`bn254_hash2curve = { git = "https://github.com/hashcloak/bn254-hash-to-curve.git", features = ["constantine_compatible"]}`
 
-OR 
+OR
 
-`bn254_hash2curve ={ git = "https://github.com/hashcloak/bn254-hash-to-curve.git", features = ["gnark_crypto_compatible"]}` 
+`bn254_hash2curve ={ git = "https://github.com/hashcloak/bn254-hash-to-curve.git", features = ["gnark_crypto_compatible"]}`
 
 and then use it as shown below:
 
@@ -40,6 +41,7 @@ fn main() {
     println!("hash_to_g2_result: {:?}", hash_to_g2_result);
 }
 ```
+
 ## Overview
 
 Hashing to a curve is a crucial operation in cryptographic protocols, enabling the secure mapping of arbitrary data to elliptic curve points. It leverages efficient cryptographic hashing techniques to map arbitrary messages onto points on the elliptic curve
